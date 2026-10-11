@@ -1,0 +1,30 @@
+services:
+  mongo:
+    image: mongo:4.4
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - internal
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/habitriver?authSource=admin
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "127.0.0.1:3000:3000"   # sementara, hanya untuk tes dari VM; dihapus setelah Nginx ada
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  mongo_data:
