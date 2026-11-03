@@ -1,20 +1,22 @@
-const competitors = [
-    { name: 'HabitMaster',  baseXp: 450, level: 4 },
-    { name: 'CodeSamurai',  baseXp: 280, level: 3 },
-    { name: 'KeepRunning',  baseXp: 120, level: 2 },
-    { name: 'BookWorm',     baseXp: 50,  level: 1 },
-    { name: 'CreativeMind', baseXp: 180, level: 2 },
-    { name: 'ZenMaster',    baseXp: 90,  level: 1 }
-];
+let leaderboardCache = [];
+let leaderboardTimer = null;
+
+async function refreshLeaderboard() {
+    try { leaderboardCache = await api('/leaderboard'); } catch {}
+    renderLeaderboard();
+    if (!leaderboardTimer) leaderboardTimer = setInterval(refreshLeaderboard, 60000);
+}
 
 function renderLeaderboard() {
     const list = document.getElementById('leaderboard-list');
+    if (!list) return;
     list.innerHTML = '';
 
+    // data diri sendiri memakai nilai lokal agar langsung terbarui
     const boardData = [
         { name: currentUser || 'You', totalXp: getTotalXp(), level: userProfile.level, isUser: true },
-        ...competitors.map(c => ({ name: c.name, totalXp: c.baseXp + (c.level - 1) * 100, level: c.level, isUser: false }))
-    ].sort((a, b) => b.totalXp - a.totalXp);
+        ...leaderboardCache.filter(p => p.name !== currentUser).map(p => ({ ...p, isUser: false }))
+    ].sort((a, b) => b.totalXp - a.totalXp).slice(0, 10);
 
     boardData.forEach((p, i) => {
         const row = document.createElement('div');

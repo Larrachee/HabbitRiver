@@ -18,6 +18,7 @@ const User = mongoose.model('User', new mongoose.Schema({
   username: { type: String, required: true, unique: true, trim: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  lastLogin: { type: Date, default: null },
 }, { timestamps: true }));
 
 const Habit = mongoose.model('Habit', new mongoose.Schema({
@@ -98,6 +99,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const ok = u && await bcrypt.compare(p.data.password, u.passwordHash);
   if (!ok) { audit('LOGIN_FAILED', req, u?._id, p.data.username); return res.status(401).json({ error: 'Username atau password salah' }); }
   const token = jwt.sign({ id: u._id, role: u.role }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' });
+  User.updateOne({ _id: u._id }, { lastLogin: new Date() }).catch(() => {});
   audit('LOGIN_OK', req, u._id);
   res.json({ token, username: u.username, role: u.role });
 });
@@ -153,10 +155,105 @@ app.get('/api/habits/:id/stats', auth, validId, async (req, res) => {
 });
 
 // ---------- Admin (proses 4.0) ----------
-app.get('/api/admin/users', auth, requireRole('admin'), async (req, res) =>
-  res.json(await User.find().select('-passwordHash')));
+// ---------- Statistik (dihitung di server dari data user) ----------
+const bestStreak = (history) => {
+  const days = Object.keys(history || {}).sort();
+  let best = 0, run = 0, prev = null;
+  for (const d of days) {
+    run = prev && (Date.parse(d) - Date.parse(prev)) === 86400000 ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
+};
+const summarize = (data, today) => {
+  const habits = (data && data.habits) || [];
+  const profile = (data && data.userProfile) || { xp: 0, level: 1 };
+  return {
+    habits: habits.length,
+    level: profile.level,
+    totalXp: profile.xp + (profile.level * (profile.level - 1) / 2) * 100,
+    bestStreak: habits.reduce((m, h) => Math.max(m, bestStreak(h.history)), 0),
+    completedToday: habits.filter((h) => h.history && h.history[today]).length,
+  };
+};
+const todayOf = (req) => {
+  const t = String(req.query.today || '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : new Date().toISOString().slice(0, 10);
+};
+const isSelf = (req) => req.params.id === String(req.user.id);
+
+app.get('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
+  const users = await User.find().select('-passwordHash').sort({ createdAt: 1 });
+  const datas = await UserData.find({ userId: { $in: users.map((u) => u._id) } });
+  const map = new Map(datas.map((d) => [String(d.userId), d.data]));
+  const today = todayOf(req);
+  res.json(users.map((u) => ({
+    id: u._id, username: u.username, role: u.role,
+    createdAt: u.createdAt, lastLogin: u.lastLogin,
+    ...summarize(map.get(String(u._id)), today),
+  })));
+});
+
+app.get('/api/admin/users/:id', auth, requireRole('admin'), validId, async (req, res) => {
+  const u = await User.findById(req.params.id).select('-passwordHash');
+  if (!u) return res.status(404).json({ error: 'User tidak ditemukan' });
+  const d = await UserData.findOne({ userId: u._id });
+  res.json({ id: u._id, username: u.username, role: u.role, habits: (d && d.data.habits) || [] });
+});
+
+app.post('/api/admin/users', auth, requireRole('admin'), async (req, res) => {
+  const p = authSchema.extend({ role: z.enum(['user', 'admin']) }).safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Input tidak valid' });
+  try {
+    const u = await User.create({
+      username: p.data.username,
+      passwordHash: await bcrypt.hash(p.data.password, 12),
+      role: p.data.role,
+    });
+    audit('USER_CREATED', req, req.user.id, `${u.username} (${u.role})`);
+    res.status(201).json({ message: 'User dibuat' });
+  } catch (e) {
+    res.status(e.code === 11000 ? 409 : 500).json({ error: e.code === 11000 ? 'Username sudah dipakai' : 'Server error' });
+  }
+});
+
+app.put('/api/admin/users/:id/password', auth, requireRole('admin'), validId, async (req, res) => {
+  const p = z.object({ password: z.string().min(8).max(72) }).safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Password minimal 8 karakter' });
+  const u = await User.findByIdAndUpdate(req.params.id, { passwordHash: await bcrypt.hash(p.data.password, 12) });
+  if (!u) return res.status(404).json({ error: 'User tidak ditemukan' });
+  audit('PASSWORD_RESET', req, req.user.id, u.username);
+  res.json({ message: 'Password diubah' });
+});
+
+app.delete('/api/admin/users/:id', auth, requireRole('admin'), validId, async (req, res) => {
+  if (isSelf(req)) return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri' });
+  const u = await User.findByIdAndDelete(req.params.id);
+  if (!u) return res.status(404).json({ error: 'User tidak ditemukan' });
+  await Promise.all([
+    UserData.deleteOne({ userId: u._id }),
+    Habit.deleteMany({ userId: u._id }),
+    HabitLog.deleteMany({ userId: u._id }),
+  ]);
+  audit('USER_DELETED', req, req.user.id, u.username);
+  res.json({ message: 'User dihapus' });
+});
+
+// Leaderboard: hanya username, level, dan total XP (10 teratas, tanpa admin)
+app.get('/api/leaderboard', auth, async (req, res) => {
+  const users = await User.find({ role: 'user' }).select('username');
+  const datas = await UserData.find({ userId: { $in: users.map((u) => u._id) } });
+  const map = new Map(datas.map((d) => [String(d.userId), d.data]));
+  const rows = users.map((u) => {
+    const s = summarize(map.get(String(u._id)), '');
+    return { name: u.username, level: s.level, totalXp: s.totalXp };
+  }).sort((a, b) => b.totalXp - a.totalXp).slice(0, 10);
+  res.json(rows);
+});
 
 app.patch('/api/admin/users/:id/role', auth, requireRole('admin'), validId, async (req, res) => {
+  if (req.params.id === String(req.user.id)) return res.status(400).json({ error: 'Tidak bisa mengubah role sendiri' });
   const p = z.object({ role: z.enum(['user', 'admin']) }).safeParse(req.body);
   if (!p.success) return res.status(400).json({ error: 'Input tidak valid' });
   const u = await User.findByIdAndUpdate(req.params.id, { role: p.data.role }, { new: true }).select('-passwordHash');

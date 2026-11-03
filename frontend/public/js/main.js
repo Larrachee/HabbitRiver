@@ -4,7 +4,7 @@ function initApp() {
     updateProfileUI();
     renderHabits();
     updateChart();
-    renderLeaderboard();
+    refreshLeaderboard();
     updateStats();
     renderAchievements();
     renderYearHeatmap();
@@ -23,33 +23,17 @@ function bindAllUI() {
 }
 
 async function boot() {
-    await ensureAdmin();
     bindAllUI();
 
-    if (isAuthed()) {
-        const username = getCurrentUsername();
-        const users = getUsers();
-        const user = users[username.toLowerCase()] || users[username];
-
-        if (!user) {
-            localStorage.removeItem(SESSION_KEY);
-            sessionStorage.removeItem(SESSION_KEY);
-            showAuthScreen();
-            return;
-        }
-
-        currentUser = user.name;
-        currentUserRole = user.role;
-
-        if (user.role === 'admin') {
-            showAdminScreen();
-        } else {
-            loadUserData(user.name);
-            showAppScreen();
-        }
+    if (isAuthed() && await restoreSession()) {
+        if (currentUserRole === 'admin') showAdminScreen();
+        else showAppScreen();
     } else {
         showAuthScreen();
     }
 }
+
+// simpan perubahan yang masih tertunda sebelum halaman ditutup / di-refresh
+window.addEventListener('beforeunload', () => { flushUserData(); });
 
 boot();

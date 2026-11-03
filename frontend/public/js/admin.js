@@ -1,17 +1,17 @@
+let adminUsers = [];
+
+async function loadAdminUsers() {
+    try { adminUsers = await api('/admin/users?today=' + getTodayStr()); }
+    catch (e) { showToast(e.message, 'error'); }
+}
+
 function computeAdminStats() {
-    const users = getUsers();
-    const keys = Object.keys(users);
-    let totalUsers = 0, totalAdmins = 0, totalHabits = 0, activeToday = 0;
-
-    keys.forEach(u => {
-        totalUsers++;
-        if (users[u].role === 'admin') totalAdmins++;
-        const stats = getUserStats(u);
-        totalHabits += stats.habits.length;
-        if (stats.completedToday > 0) activeToday++;
-    });
-
-    return { totalUsers, totalAdmins, totalHabits, activeToday };
+    return {
+        totalUsers:  adminUsers.length,
+        totalAdmins: adminUsers.filter(u => u.role === 'admin').length,
+        totalHabits: adminUsers.reduce((n, u) => n + u.habits, 0),
+        activeToday: adminUsers.filter(u => u.completedToday > 0).length
+    };
 }
 
 function renderAdminStats() {
@@ -27,85 +27,74 @@ function renderAdminUsers() {
     const empty = document.getElementById('admin-empty');
     tbody.innerHTML = '';
 
-    const users = getUsers();
-    const filter = adminSearch;
+    const rows = adminUsers.filter(u => !adminSearch || u.username.toLowerCase().includes(adminSearch));
 
-    const rows = Object.keys(users).filter(username => {
-        if (!filter) return true;
-        return username.toLowerCase().includes(filter) || users[username].name.toLowerCase().includes(filter);
-    }).sort((a, b) => (users[a].createdAt || '').localeCompare(users[b].createdAt || ''));
-
-    if (rows.length === 0) {
-        empty.hidden = false;
-        return;
-    }
+    if (rows.length === 0) { empty.hidden = false; return; }
     empty.hidden = true;
 
-    rows.forEach(username => {
-        const u = users[username];
-        const stats = getUserStats(username);
+    rows.forEach(u => {
         const tr = document.createElement('tr');
-        const isSelf = username === currentUser;
-        if (isSelf) tr.classList.add('is-self');
+        const self = u.username === currentUser;
+        if (self) tr.classList.add('is-self');
 
         tr.innerHTML = `
-            <td>${escapeHtml(u.name)}${isSelf ? ' <span class="badge-role role-admin" style="margin-left:6px;">you</span>' : ''}</td>
-            <td><span class="badge-role ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role}</span></td>
+            <td>${escapeHtml(u.username)}${self ? ' <span class="badge-role role-admin" style="margin-left:6px;">you</span>' : ''}</td>
+            <td><span class="badge-role ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${escapeHtml(u.role)}</span></td>
             <td class="mono">${formatDate(u.createdAt)}</td>
             <td class="mono">${formatDateTime(u.lastLogin)}</td>
-            <td class="mono">${stats.habits.length}</td>
-            <td class="mono">Lv.${stats.profile.level}</td>
-            <td class="mono">${stats.totalXp}</td>
-            <td class="mono">${stats.bestStreak}</td>
+            <td class="mono">${u.habits}</td>
+            <td class="mono">Lv.${u.level}</td>
+            <td class="mono">${u.totalXp}</td>
+            <td class="mono">${u.bestStreak}</td>
             <td class="col-actions">
                 <button class="row-action" data-action="view" title="View details"><i class="fas fa-eye"></i></button>
                 <button class="row-action" data-action="reset" title="Reset password"><i class="fas fa-key"></i></button>
-                <button class="row-action" data-action="role" title="Toggle role" ${isSelf ? 'disabled' : ''}><i class="fas fa-user-shield"></i></button>
-                <button class="row-action danger" data-action="delete" title="Delete user" ${isSelf ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                <button class="row-action" data-action="role" title="Toggle role" ${self ? 'disabled' : ''}><i class="fas fa-user-shield"></i></button>
+                <button class="row-action danger" data-action="delete" title="Delete user" ${self ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
             </td>
         `;
 
         tr.querySelectorAll('.row-action').forEach(btn => {
-            btn.addEventListener('click', () => handleAdminAction(btn.dataset.action, username));
+            btn.addEventListener('click', () => handleAdminAction(btn.dataset.action, u.id));
         });
-
         tbody.appendChild(tr);
     });
 }
 
-function handleAdminAction(action, username) {
-    if (action === 'view')   return openAdminUserModal(username);
-    if (action === 'reset')  return adminResetPassword(username);
-    if (action === 'role')   return adminToggleRole(username);
-    if (action === 'delete') return adminDeleteUser(username);
+function handleAdminAction(action, id) {
+    if (action === 'view')   return openAdminUserModal(id);
+    if (action === 'reset')  return adminResetPassword(id);
+    if (action === 'role')   return adminToggleRole(id);
+    if (action === 'delete') return adminDeleteUser(id);
 }
 
-function openAdminUserModal(username) {
-    const users = getUsers();
-    const u = users[username];
+async function openAdminUserModal(id) {
+    const u = adminUsers.find(x => x.id === id);
     if (!u) return;
 
-    adminModalUsername = username;
-    const stats = getUserStats(username);
+    let habitsList = [];
+    try { habitsList = (await api('/admin/users/' + id)).habits || []; }
+    catch (e) { return showToast(e.message, 'error'); }
 
+    adminModalUsername = id;   // menyimpan id user
     document.getElementById('admin-modal-role').textContent  = u.role;
-    document.getElementById('admin-modal-title').textContent = u.name;
+    document.getElementById('admin-modal-title').textContent = u.username;
     document.getElementById('admin-modal-sub').textContent   =
         `Registered ${formatDate(u.createdAt)} · Last login ${formatDateTime(u.lastLogin)}`;
 
     document.getElementById('admin-modal-stats').innerHTML = `
-        <div class="modal-stat"><div class="ms-value">${stats.habits.length}</div><span class="ms-label">Habits</span></div>
-        <div class="modal-stat"><div class="ms-value">${stats.profile.level}</div><span class="ms-label">Level</span></div>
-        <div class="modal-stat"><div class="ms-value">${stats.totalXp}</div><span class="ms-label">Total XP</span></div>
-        <div class="modal-stat"><div class="ms-value">${stats.bestStreak}</div><span class="ms-label">Best streak</span></div>
+        <div class="modal-stat"><div class="ms-value">${u.habits}</div><span class="ms-label">Habits</span></div>
+        <div class="modal-stat"><div class="ms-value">${u.level}</div><span class="ms-label">Level</span></div>
+        <div class="modal-stat"><div class="ms-value">${u.totalXp}</div><span class="ms-label">Total XP</span></div>
+        <div class="modal-stat"><div class="ms-value">${u.bestStreak}</div><span class="ms-label">Best streak</span></div>
     `;
 
     const listEl = document.getElementById('admin-modal-habits');
     listEl.innerHTML = '';
-    if (stats.habits.length === 0) {
+    if (habitsList.length === 0) {
         listEl.innerHTML = `<div class="empty-state" style="padding:24px 0;"><i class="fas fa-inbox"></i><p>No habits yet.</p></div>`;
     } else {
-        stats.habits.forEach(h => {
+        habitsList.forEach(h => {
             const row = document.createElement('div');
             row.className = 'admin-habit-row';
             const streak = getBestStreak(h.history || {});
@@ -118,9 +107,9 @@ function openAdminUserModal(username) {
         });
     }
 
-    const isSelf = username === currentUser;
-    document.getElementById('admin-modal-toggle-role').disabled = isSelf;
-    document.getElementById('admin-modal-delete').disabled = isSelf;
+    const self = u.username === currentUser;
+    document.getElementById('admin-modal-toggle-role').disabled = self;
+    document.getElementById('admin-modal-delete').disabled = self;
 
     const modal = document.getElementById('admin-user-modal');
     modal.classList.add('open');
@@ -134,60 +123,53 @@ function closeAdminModal() {
     adminModalUsername = null;
 }
 
-async function adminResetPassword(username) {
-    const users = getUsers();
-    if (!users[username]) return;
-    const newPass = prompt(`New password for "${username}" (min 6 chars):`);
-    if (newPass === null) return;
-    if (newPass.length < 6) return alert('Password must be at least 6 characters.');
-
-    users[username].hash = await hashPassword(newPass);
-    saveUsers(users);
-    showToast(`Password reset for "${username}"`, 'success');
-    renderAdminUsers();
-}
-
-function adminToggleRole(username) {
-    if (username === currentUser) {
-        showToast('You cannot change your own role', 'error');
-        return;
-    }
-    const users = getUsers();
-    if (!users[username]) return;
-    const newRole = users[username].role === 'admin' ? 'user' : 'admin';
-    if (!confirm(`Change role of "${username}" to ${newRole}?`)) return;
-
-    users[username].role = newRole;
-    saveUsers(users);
-    showToast(`"${username}" is now ${newRole}`, 'success');
-    renderAdminUsers();
-    if (adminModalUsername === username) openAdminUserModal(username);
-}
-
-function adminDeleteUser(username) {
-    if (username === currentUser) {
-        showToast('You cannot delete your own account', 'error');
-        return;
-    }
-    if (!confirm(`Delete user "${username}" and ALL their data? This cannot be undone.`)) return;
-
-    const users = getUsers();
-    delete users[username];
-    saveUsers(users);
-
-    ['habits', 'userProfile', 'achievements', 'habitNotes'].forEach(prefix => {
-        localStorage.removeItem(`${prefix}_${username}`);
-    });
-
-    showToast(`User "${username}" deleted`, 'error');
-    closeAdminModal();
+async function refreshAdmin() {
+    await loadAdminUsers();
     renderAdminStats();
     renderAdminUsers();
+}
+
+async function adminResetPassword(id) {
+    const u = adminUsers.find(x => x.id === id);
+    if (!u) return;
+    const newPass = prompt(`New password for "${u.username}" (min 8 chars):`);
+    if (newPass === null) return;
+    if (newPass.length < 8) return alert('Password must be at least 8 characters.');
+    try {
+        await api(`/admin/users/${id}/password`, { method: 'PUT', body: { password: newPass } });
+        showToast(`Password reset for "${u.username}"`, 'success');
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function adminToggleRole(id) {
+    const u = adminUsers.find(x => x.id === id);
+    if (!u) return;
+    if (u.username === currentUser) return showToast('You cannot change your own role', 'error');
+    const newRole = u.role === 'admin' ? 'user' : 'admin';
+    if (!confirm(`Change role of "${u.username}" to ${newRole}?`)) return;
+    try {
+        await api(`/admin/users/${id}/role`, { method: 'PATCH', body: { role: newRole } });
+        showToast(`"${u.username}" is now ${newRole}`, 'success');
+        await refreshAdmin();
+        if (adminModalUsername === id) openAdminUserModal(id);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function adminDeleteUser(id) {
+    const u = adminUsers.find(x => x.id === id);
+    if (!u) return;
+    if (u.username === currentUser) return showToast('You cannot delete your own account', 'error');
+    if (!confirm(`Delete user "${u.username}" and ALL their data? This cannot be undone.`)) return;
+    try {
+        await api('/admin/users/' + id, { method: 'DELETE' });
+        showToast(`User "${u.username}" deleted`, 'error');
+        closeAdminModal();
+        await refreshAdmin();
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
 function initAdmin() {
-    renderAdminStats();
-    renderAdminUsers();
+    refreshAdmin();
 }
 
 function bindAdminUI() {
@@ -204,9 +186,8 @@ function bindAdminUI() {
         if (adminModalUsername) adminDeleteUser(adminModalUsername);
     });
 
-    document.getElementById('admin-refresh').addEventListener('click', () => {
-        renderAdminStats();
-        renderAdminUsers();
+    document.getElementById('admin-refresh').addEventListener('click', async () => {
+        await refreshAdmin();
         showToast('Data refreshed', 'success');
     });
 
@@ -216,33 +197,17 @@ function bindAdminUI() {
     });
 
     document.getElementById('admin-create-user').addEventListener('click', async () => {
-        const username = prompt('New username (min 3 chars):');
+        const username = prompt('New username (3-30 chars, letters/numbers/underscore):');
         if (username === null) return;
-        const trimmed = username.trim();
-        if (trimmed.length < 3) return alert('Username must be at least 3 characters.');
-
-        const key = trimmed.toLowerCase();
-        const users = getUsers();
-        if (users[key]) return alert('Username is already taken.');
-
-        const password = prompt('Password (min 6 chars):');
+        const password = prompt('Password (min 8 chars):');
         if (password === null) return;
-        if (password.length < 6) return alert('Password must be at least 6 characters.');
-
         const roleInput = prompt('Role — type "admin" or "user":', 'user');
         const role = (roleInput || '').toLowerCase() === 'admin' ? 'admin' : 'user';
 
-        users[key] = {
-            name: trimmed,
-            hash: await hashPassword(password),
-            role,
-            createdAt: new Date().toISOString(),
-            lastLogin: null
-        };
-        saveUsers(users);
-
-        showToast(`User "${trimmed}" created (${role})`, 'success');
-        renderAdminStats();
-        renderAdminUsers();
+        try {
+            await api('/admin/users', { method: 'POST', body: { username: username.trim(), password, role } });
+            showToast(`User "${username.trim()}" created (${role})`, 'success');
+            await refreshAdmin();
+        } catch (e) { showToast(e.message === 'Input tidak valid' ? 'Invalid username or password' : e.message, 'error'); }
     });
 }
