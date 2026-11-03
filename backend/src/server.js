@@ -45,14 +45,14 @@ const audit = (event, req, userId, detail = '') =>
 const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '300kb' }));
 app.use(mongoSanitize());
 app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 // ---------- Validasi ----------
 const authSchema = z.object({
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/),
+  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/).toLowerCase(),
   password: z.string().min(8).max(72),
 });
 const habitSchema = z.object({
@@ -99,7 +99,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   if (!ok) { audit('LOGIN_FAILED', req, u?._id, p.data.username); return res.status(401).json({ error: 'Username atau password salah' }); }
   const token = jwt.sign({ id: u._id, role: u.role }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' });
   audit('LOGIN_OK', req, u._id);
-  res.json({ token });
+  res.json({ token, username: u.username, role: u.role });
 });
 
 // ---------- Habit (selalu dicek kepemilikan: anti-IDOR) ----------
@@ -165,10 +165,56 @@ app.patch('/api/admin/users/:id/role', auth, requireRole('admin'), validId, asyn
   res.json(u);
 });
 
+// ---------- Data per user (habit, profil, achievement, catatan) ----------
+const UserData = mongoose.model('UserData', new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
+  data: { type: mongoose.Schema.Types.Mixed, default: {} },
+}, { timestamps: true, minimize: false }));
+
+const dataSchema = z.object({
+  habits: z.array(z.object({
+    id: z.string().max(40),
+    name: z.string().min(1).max(100),
+    category: z.string().max(40).optional(),
+    history: z.record(z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(true)),
+  })).max(200),
+  userProfile: z.object({ xp: z.number().finite(), level: z.number().int().min(1).max(1000) }),
+  unlockedAchievements: z.array(z.union([z.string().max(60), z.number()])).max(200),
+  habitNotes: z.record(z.string().max(40), z.record(z.string().max(10), z.any())),
+});
+
+app.get('/api/me', auth, async (req, res) => {
+  const u = await User.findById(req.user.id).select('username role');
+  if (!u) return res.status(401).json({ error: 'Token tidak valid' });
+  res.json({ username: u.username, role: u.role });
+});
+
+app.get('/api/me/data', auth, async (req, res) => {
+  const d = await UserData.findOne({ userId: req.user.id });
+  res.json(d ? d.data : { habits: [], userProfile: { xp: 0, level: 1 }, unlockedAchievements: [], habitNotes: {} });
+});
+
+app.put('/api/me/data', auth, async (req, res) => {
+  const p = dataSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Data tidak valid' });
+  await UserData.findOneAndUpdate({ userId: req.user.id }, { data: p.data }, { upsert: true });
+  res.json({ message: 'Tersimpan' });
+});
+
+// ---------- Admin awal dari environment (bukan hardcode di kode) ----------
+async function seedAdmin() {
+  const { ADMIN_USERNAME, ADMIN_PASSWORD } = process.env;
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) return;
+  if (await User.exists({ username: ADMIN_USERNAME })) return;
+  await User.create({ username: ADMIN_USERNAME, passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 12), role: 'admin' });
+  console.log('Akun admin awal dibuat');
+}
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: 'Server error' }); });
 
 mongoose.connect(MONGO_URI)
+  .then(seedAdmin)
   .then(() => app.listen(PORT, () => console.log(`API berjalan di port ${PORT}`)))
   .catch((e) => { console.error('Gagal konek MongoDB', e.message); process.exit(1); });

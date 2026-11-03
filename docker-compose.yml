@@ -7,6 +7,11 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - internal
 
@@ -14,12 +19,23 @@ services:
     build: ./backend
     restart: unless-stopped
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
       MONGO_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/habitriver?authSource=admin
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    networks:
+      - internal
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
     ports:
-      - "127.0.0.1:3000:3000"   # sementara, hanya untuk tes dari VM; dihapus setelah Nginx ada
+      - "8080:8080"
     networks:
       - internal
 

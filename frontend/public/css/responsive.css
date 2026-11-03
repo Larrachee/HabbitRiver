@@ -1,0 +1,42 @@
+@media (max-width: 1024px) {
+    .main-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+@media (max-width: 720px) {
+    body { padding: 26px 16px 80px; }
+    header { align-items: flex-start; flex-direction: column; gap: 18px; }
+    .brand h1 { font-size: 2.15rem; }
+    .header-right { width: 100%; }
+    .avatar { width: 54px; height: 54px; font-size: 1.35rem; }
+
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .stat-item { padding: 15px 16px; }
+    .stat-item:nth-child(2n+1) { padding-left: 0; }
+    .stat-item:nth-child(2n)   { padding-right: 0; border-right: none; }
+    .stat-item:nth-child(n+3)  { border-top: 1px solid var(--border-color); }
+
+    #habit-form { flex-direction: column; }
+    #habit-form input, #habit-form select, .btn-primary { width: 100%; }
+    .btn-primary { justify-content: center; }
+
+    .habit-header { flex-direction: column; }
+    .habit-actions { width: 100%; }
+    .habit-actions .btn-done { flex: 1; justify-content: center; }
+
+    .modal-stats { grid-template-columns: repeat(2, 1fr); row-gap: 14px; }
+    .modal-stat { padding: 0 12px 0 0; }
+    .modal-stat:nth-child(2) { border-right: none; padding-right: 0; }
+    .modal-panel { padding: 22px 18px 20px; }
+    .modal-head h3 { font-size: 1.55rem; }
+
+    .toast-container { left: 16px; right: 16px; align-items: stretch; }
+    .toast { min-width: 0; width: 100%; }
+
+    .auth-wrapper .card { padding: 22px 18px 20px; }
+    .user-chip .user-name { max-width: 70px; }
+
+    .admin-table { font-size: 0.8rem; }
+    .admin-table thead th,
+    .admin-table tbody td { padding-right: 10px; }
+    .admin-hint { font-size: 0.58rem; }
+}
