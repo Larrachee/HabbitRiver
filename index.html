@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HabitRiver — Gamified Habit Tracker</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- ==================== CSS ==================== -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/profile.css">
+    <link rel="stylesheet" href="css/habits.css">
+    <link rel="stylesheet" href="css/heatmap.css">
+    <link rel="stylesheet" href="css/chart.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/responsive.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+</head>
+
+<body>
+
+    <!-- ==================== AUTH SCREEN ==================== -->
+    <div id="auth-screen" hidden>
+        <div class="container">
+            <header>
+                <div class="brand">
+                    <h1>HabitRiver</h1>
+                    <p>Flow your progress · level up your life</p>
+                </div>
+                <div class="header-right">
+                    <button id="auth-theme-toggle" class="btn-icon" type="button" title="Toggle theme (T)">
+                        <i class="fas fa-moon"></i> Auto
+                    </button>
+                </div>
+            </header>
+
+            <div class="auth-wrapper">
+                <section class="card auth-card">
+                    <h2><i class="fas fa-right-to-bracket"></i> Welcome Back</h2>
+
+                    <div class="tabs">
+                        <button class="tab active" id="tab-login" type="button">Login</button>
+                        <button class="tab" id="tab-register" type="button">Register</button>
+                    </div>
+
+                    <form id="auth-form" novalidate>
+                        <div class="field">
+                            <label for="auth-username">Username</label>
+                            <div class="input-wrap">
+                                <i class="fas fa-user icon"></i>
+                                <input type="text" id="auth-username" placeholder="Enter your username"
+                                    autocomplete="username" required>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label for="auth-password">Password</label>
+                            <div class="input-wrap">
+                                <i class="fas fa-lock icon"></i>
+                                <input type="password" id="auth-password" placeholder="Enter your password"
+                                    autocomplete="current-password" required>
+                                <button type="button" class="toggle-pass" id="auth-toggle-pass"
+                                    title="Show/hide password">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="field hidden" id="auth-confirm-field">
+                            <label for="auth-confirm">Confirm Password</label>
+                            <div class="input-wrap">
+                                <i class="fas fa-lock icon"></i>
+                                <input type="password" id="auth-confirm" placeholder="Repeat your password"
+                                    autocomplete="new-password">
+                            </div>
+                        </div>
+
+                        <div class="options" id="auth-remember-row">
+                            <label><input type="checkbox" id="auth-remember" checked> Remember me</label>
+                        </div>
+
+                        <div class="message" id="auth-message"></div>
+
+                        <button type="submit" class="btn-primary" id="auth-submit">
+                            <i class="fas fa-right-to-bracket"></i> <span id="auth-submit-text">Login</span>
+                        </button>
+                    </form>
+
+                    <p class="admin-hint">Demo admin · <code>admin</code> / <code>admin123</code></p>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== APP SCREEN (user) ==================== -->
+    <div id="app-screen" hidden>
+        <div class="container">
+            <!-- Header -->
+            <header>
+                <div class="brand">
+                    <h1>HabitRiver</h1>
+                    <p>Flow your progress · level up your life</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-chip" title="Signed in">
+                        <span class="user-avatar" id="user-initial">U</span>
+                        <span class="user-name" id="user-name">user</span>
+                    </div>
+                    <button id="theme-toggle" class="btn-icon" type="button" title="Toggle theme (T)">
+                        <i class="fas fa-moon"></i> Auto
+                    </button>
+                    <button id="sound-toggle" class="btn-icon" type="button" title="Toggle sound">
+                        <i class="fas fa-volume-high"></i> Sound
+                    </button>
+                    <button id="export-data" class="btn-icon" type="button" title="Export data">
+                        <i class="fas fa-file-export"></i> Export
+                    </button>
+                    <button id="import-data" class="btn-icon" type="button" title="Import data">
+                        <i class="fas fa-file-import"></i> Import
+                    </button>
+                    <input type="file" id="import-file" accept="application/json" hidden>
+                    <button id="reset-data" class="btn-icon" type="button" style="color: var(--danger-color);"
+                        title="Reset data">
+                        <i class="fas fa-trash"></i> Reset
+                    </button>
+                    <button id="logout-btn" class="btn-icon" type="button" title="Logout">
+                        <i class="fas fa-right-from-bracket"></i> Logout
+                    </button>
+                </div>
+            </header>
+
+            <!-- Profile -->
+            <section class="profile-section">
+                <div class="profile-info">
+                    <div class="avatar" id="profile-avatar">HR</div>
+                    <div class="profile-stats">
+                        <h2 id="user-level">Level 1 (Novice)</h2>
+                        <div class="xp-bar-container">
+                            <div id="xp-bar" class="xp-bar-fill" style="width: 0%"></div>
+                        </div>
+                        <span id="xp-text">0 / 100 XP</span>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-habits">0</div>
+                        <div class="stat-label">Total Habits</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="completed-today">0</div>
+                        <div class="stat-label">Completed Today</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="streak-count">0</div>
+                        <div class="stat-label">Best Streak</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-xp">0</div>
+                        <div class="stat-label">Total XP</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Layout -->
+            <div class="main-layout">
+                <div class="left-column">
+                    <!-- Add Habit -->
+                    <section class="card">
+                        <h2><i class="fas fa-plus-circle"></i> Add New Habit</h2>
+                        <form id="habit-form">
+                            <input type="text" id="habit-name" placeholder="E.g., Coding, Read Book..." required>
+                            <select id="habit-category">
+                                <option value="💻 Coding">💻 Coding</option>
+                                <option value="🏃 Health">🏃 Health</option>
+                                <option value="📚 Study">📚 Study</option>
+                                <option value="💰 Finance">💰 Finance</option>
+                                <option value="🎨 Creative">🎨 Creative</option>
+                                <option value="🧘 Mindfulness">🧘 Mindfulness</option>
+                            </select>
+                            <button type="submit" class="btn-primary">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </form>
+                    </section>
+
+                    <!-- Habits List -->
+                    <section class="card">
+                        <h2><i class="fas fa-tasks"></i> Your Habits</h2>
+
+                        <div class="habit-toolbar">
+                            <div class="search-field">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="habit-search" placeholder="Search habits…  ( / )"
+                                    autocomplete="off">
+                            </div>
+                            <button id="complete-all" type="button" class="btn-tool"
+                                title="Mark all visible habits as done today">
+                                <i class="fas fa-bolt"></i> Complete all today
+                            </button>
+                        </div>
+
+                        <div class="filter-container" id="filter-container">
+                            <button type="button" class="btn-filter active" data-filter="All">All</button>
+                            <button type="button" class="btn-filter" data-filter="💻 Coding">💻 Coding</button>
+                            <button type="button" class="btn-filter" data-filter="🏃 Health">🏃 Health</button>
+                            <button type="button" class="btn-filter" data-filter="📚 Study">📚 Study</button>
+                            <button type="button" class="btn-filter" data-filter="💰 Finance">💰 Finance</button>
+                            <button type="button" class="btn-filter" data-filter="🎨 Creative">🎨 Creative</button>
+                            <button type="button" class="btn-filter" data-filter="🧘 Mindfulness">🧘
+                                Mindfulness</button>
+                        </div>
+
+                        <div id="habit-list"></div>
+                    </section>
+
+                    <!-- Year Heatmap -->
+                    <section class="card">
+                        <h2><i class="fas fa-calendar-alt"></i> Year Activity</h2>
+                        <div class="year-heatmap-wrap">
+                            <div id="year-heatmap" class="year-heatmap" aria-label="Activity heatmap"></div>
+                            <div class="heatmap-legend">
+                                <span>Less</span>
+                                <span class="heatmap-cell" data-level="0"></span>
+                                <span class="heatmap-cell" data-level="1"></span>
+                                <span class="heatmap-cell" data-level="2"></span>
+                                <span class="heatmap-cell" data-level="3"></span>
+                                <span class="heatmap-cell" data-level="4"></span>
+                                <span>More</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="right-column">
+                    <!-- Chart -->
+                    <section class="card">
+                        <h2><i class="fas fa-chart-line"></i> Weekly Progress</h2>
+                        <div class="chart-container">
+                            <canvas id="progressChart"></canvas>
+                        </div>
+                    </section>
+
+                    <!-- Achievements -->
+                    <section class="card">
+                        <h2><i class="fas fa-medal"></i> Achievements</h2>
+                        <div class="achievements-grid" id="achievements-list"></div>
+                    </section>
+
+                    <!-- Leaderboard -->
+                    <section class="card">
+                        <h2><i class="fas fa-trophy"></i> Leaderboard</h2>
+                        <div id="leaderboard-list"></div>
+                    </section>
+                </div>
+            </div>
+
+            <footer class="shortcuts-hint">
+                <span><kbd>N</kbd> new habit</span>
+                <span><kbd>/</kbd> search</span>
+                <span><kbd>T</kbd> theme</span>
+                <span><kbd>Esc</kbd> close</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ==================== ADMIN SCREEN ==================== -->
+    <div id="admin-screen" hidden>
+        <div class="container">
+            <header>
+                <div class="brand">
+                    <h1>HabitRiver<span class="admin-mark"> / admin</span></h1>
+                    <p>Control room · manage accounts & monitor activity</p>
+                </div>
+                <div class="header-right">
+                    <div class="user-chip" title="Signed in as admin">
+                        <span class="user-avatar" id="admin-initial">A</span>
+                        <span class="user-name" id="admin-name">admin</span>
+                    </div>
+                    <button id="admin-theme-toggle" class="btn-icon" type="button" title="Toggle theme (T)">
+                        <i class="fas fa-moon"></i> Auto
+                    </button>
+                    <button id="admin-refresh" class="btn-icon" type="button" title="Refresh data">
+                        <i class="fas fa-rotate"></i> Refresh
+                    </button>
+                    <button id="admin-logout-btn" class="btn-icon" type="button" title="Logout"
+                        style="color: var(--danger-color);">
+                        <i class="fas fa-right-from-bracket"></i> Logout
+                    </button>
+                </div>
+            </header>
+
+            <section class="profile-section">
+                <div class="stats-grid stats-grid--top">
+                    <div class="stat-item">
+                        <div class="stat-value" id="admin-total-users">0</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="admin-total-admins">0</div>
+                        <div class="stat-label">Admins</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="admin-total-habits">0</div>
+                        <div class="stat-label">Habits (all users)</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="admin-active-today">0</div>
+                        <div class="stat-label">Active Today</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2><i class="fas fa-users-gear"></i> User Accounts</h2>
+
+                <div class="habit-toolbar">
+                    <div class="search-field">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="admin-search" placeholder="Search users…" autocomplete="off">
+                    </div>
+                    <button id="admin-create-user" type="button" class="btn-tool">
+                        <i class="fas fa-user-plus"></i> Create user
+                    </button>
+                </div>
+
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Registered</th>
+                                <th>Last Login</th>
+                                <th>Habits</th>
+                                <th>Level</th>
+                                <th>XP</th>
+                                <th>Best Streak</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-body"></tbody>
+                    </table>
+                    <div id="admin-empty" class="empty-state" hidden>
+                        <i class="fas fa-user-slash"></i>
+                        <p>No users match your search.</p>
+                    </div>
+                </div>
+            </section>
+
+            <footer class="shortcuts-hint">
+                <span><kbd>/</kbd> search</span>
+                <span><kbd>T</kbd> theme</span>
+                <span><kbd>Esc</kbd> close</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ==================== ADMIN USER MODAL ==================== -->
+    <div id="admin-user-modal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel" role="dialog" aria-modal="true">
+            <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+            <div class="modal-head">
+                <span class="modal-category" id="admin-modal-role">User</span>
+                <h3 id="admin-modal-title">username</h3>
+                <p class="modal-sub" id="admin-modal-sub">—</p>
+            </div>
+
+            <div class="modal-stats" id="admin-modal-stats"></div>
+
+            <div class="modal-section">
+                <h4>Habits</h4>
+                <div id="admin-modal-habits" class="admin-habit-list"></div>
+            </div>
+
+            <div class="modal-section">
+                <h4>Admin actions</h4>
+                <div class="admin-modal-actions">
+                    <button type="button" class="btn-tool" id="admin-modal-reset">
+                        <i class="fas fa-key"></i> Reset password
+                    </button>
+                    <button type="button" class="btn-tool" id="admin-modal-toggle-role">
+                        <i class="fas fa-user-shield"></i> Toggle role
+                    </button>
+                    <button type="button" class="btn-tool danger" id="admin-modal-delete">
+                        <i class="fas fa-trash"></i> Delete user
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== HABIT DETAIL MODAL ==================== -->
+    <div id="habit-modal" class="modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+            <div class="modal-head">
+                <span class="modal-category" id="modal-category">Category</span>
+                <h3 id="modal-title">Habit</h3>
+                <p class="modal-sub" id="modal-sub">—</p>
+            </div>
+
+            <div class="modal-stats" id="modal-stats"></div>
+
+            <div class="modal-section">
+                <h4>Last 12 weeks</h4>
+                <div id="modal-heatmap" class="modal-heatmap"></div>
+            </div>
+
+            <div class="modal-section">
+                <h4>Note for today</h4>
+                <textarea id="modal-note" rows="3" placeholder="What made today work (or not)?"></textarea>
+                <div class="modal-note-actions">
+                    <button type="button" id="modal-note-save" class="btn-primary">Save note</button>
+                    <span id="modal-note-status" class="note-status"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ==================== JS (urutan penting!) ==================== -->
+    <script src="js/utils.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/sound.js"></script>
+    <script src="js/confetti.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/streak.js"></script>
+    <script src="js/xp.js"></script>
+    <script src="js/achievements.js"></script>
+    <script src="js/leaderboard.js"></script>
+    <script src="js/chart.js"></script>
+    <script src="js/heatmap.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/habits.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/shortcuts.js"></script>
+    <script src="js/main.js"></script>
+</body>
+
+</html>

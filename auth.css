@@ -1,0 +1,136 @@
+.auth-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.auth-wrapper .card {
+    width: 100%;
+    max-width: 440px;
+    margin-bottom: 0;
+}
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+
+.tab {
+    flex: 1;
+    padding: 9px 12px;
+    font: 500 0.66rem var(--font-mono);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.tab:hover { color: var(--text-color); border-color: var(--text-color); }
+.tab.active {
+    color: var(--bg-color);
+    background: var(--text-color);
+    border-color: var(--text-color);
+}
+
+/* ---------- fields ---------- */
+.field { margin-bottom: 16px; }
+
+.field label {
+    display: block;
+    margin-bottom: 6px;
+    font: 500 0.6rem var(--font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.input-wrap { position: relative; }
+
+.input-wrap > i.icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.input-wrap input {
+    width: 100%;
+    padding: 11px 42px 11px 38px;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    transition: border-color var(--transition);
+}
+.input-wrap input::placeholder { color: var(--text-muted); }
+.input-wrap input:focus { outline: none; border-color: var(--text-color); }
+
+.toggle-pass {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color var(--transition);
+}
+.toggle-pass:hover { color: var(--text-color); }
+
+/* ---------- options + message ---------- */
+.options {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    font: 400 0.68rem var(--font-mono);
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+.options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.options input[type="checkbox"] {
+    width: 14px; height: 14px;
+    accent-color: var(--secondary-color);
+    cursor: pointer;
+}
+
+.message {
+    min-height: 18px;
+    margin-bottom: 12px;
+    font: 400 0.72rem var(--font-mono);
+    letter-spacing: 0.05em;
+    text-align: center;
+}
+.message.error   { color: var(--danger-color); }
+.message.success { color: var(--success-color); }
+
+.auth-card .btn-primary {
+    width: 100%;
+    justify-content: center;
+}
+
+/* ---------- demo hint ---------- */
+.admin-hint {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    font: 400 0.62rem var(--font-mono);
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: var(--text-muted);
+}
+.admin-hint code {
+    padding: 1px 6px;
+    font: 500 0.65rem var(--font-mono);
+    color: var(--text-color);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+}

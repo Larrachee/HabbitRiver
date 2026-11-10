@@ -1,0 +1,147 @@
+:root {
+    --bg-color:        #131312;
+    --card-bg:         #1a1a18;
+    --text-color:      #ece7dc;
+    --text-muted:      #85806f;
+    --primary-color:   #ece7dc;
+    --secondary-color: #e2622f;
+    --border-color:    #2c2b26;
+    --grid-empty:      #232320;
+    --grid-done:       #e2622f;
+    --grid-done-hover: #f57e4f;
+    --streak-color:    #e2622f;
+    --danger-color:    #c0574a;
+    --success-color:   #63a07d;
+
+    --radius: 2px;
+    --transition: 140ms ease;
+
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+
+[data-theme="light"] {
+    --bg-color:        #eae7df;
+    --card-bg:         #f7f5f0;
+    --text-color:      #1a1915;
+    --text-muted:      #6f6a5d;
+    --primary-color:   #1a1915;
+    --secondary-color: #c4441f;
+    --border-color:    #d2ccbe;
+    --grid-empty:      #ded9cc;
+    --grid-done:       #c4441f;
+    --grid-done-hover: #a83714;
+    --streak-color:    #c4441f;
+    --danger-color:    #9e3324;
+    --success-color:   #2f6b4f;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    min-height: 100vh;
+    padding: 40px 24px 96px;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font: 15px/1.55 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+i.fas, i.far, i.fab { line-height: 1; }
+
+.container { max-width: 1180px; margin: 0 auto; }
+
+/* ---------- layout ---------- */
+.main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+}
+
+/* ---------- card ---------- */
+.card {
+    padding: 20px 22px 24px;
+    margin-bottom: 24px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    transition: border-color var(--transition);
+}
+
+.card h2 {
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 18px; padding-bottom: 12px;
+    font: 500 0.66rem var(--font-mono);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.card h2 i { font-size: 0.72rem; color: var(--secondary-color); }
+
+/* ---------- empty state ---------- */
+.empty-state {
+    padding: 52px 20px;
+    text-align: center;
+    font: 400 0.76rem var(--font-mono);
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+.empty-state i { display: block; margin-bottom: 14px; font-size: 1.6rem; opacity: 0.4; }
+
+/* ---------- shortcuts footer ---------- */
+.shortcuts-hint {
+    display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
+    margin-top: 36px; padding-top: 18px;
+    border-top: 1px solid var(--border-color);
+    font: 400 0.62rem var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.shortcuts-hint kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 2px 6px;
+    margin-right: 6px;
+    font: 400 0.62rem var(--font-mono);
+    text-align: center;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+}
+
+/* ---------- button ---------- */
+.btn-primary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 22px;
+    font: 600 0.68rem var(--font-mono);
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--bg-color);
+    background: var(--text-color);
+    border: 1px solid var(--text-color);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.btn-primary:hover {
+    color: #fff;
+    background: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+.btn-primary:active { transform: translateY(1px); }
+
+/* ---------- helpers ---------- */
+[hidden] { display: none !important; }
+.hidden  { display: none !important; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-color); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
