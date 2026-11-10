@@ -1,0 +1,326 @@
+name: CI/CD HabitRiver (DevSecOps)
+
+# Alur:
+#   secrets-scan ─┐
+#   sca (npm audit)├─> dast (build stack → smoke test keamanan → OWASP ZAP) ─> deploy (opsional)
+#   sast-semgrep ─┤
+#   build-scan ───┘   (Trivy image scan)
+#   sast-sonar (opsional, hanya jalan kalau secret Sonar diisi)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Hak minimal. Job yang butuh lebih menaikkannya sendiri.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------
+  # Tahap 1a. Secret scanning (T-13)
+  # ------------------------------------------------------------------
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks memeriksa seluruh riwayat commit
+
+      - name: Jalankan gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            detect --source /repo --redact --verbose --exit-code 1
+
+  # ------------------------------------------------------------------
+  # Tahap 1b. SCA: dependency rentan (T-12)
+  # ------------------------------------------------------------------
+  sca:
+    name: SCA (npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # npm ci gagal kalau package.json dan lockfile tidak sinkron (T-12)
+      - name: Install dependency sesuai lockfile
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Simpan laporan lengkap (JSON)
+        run: npm audit --omit=dev --json > npm-audit.json || true
+
+      - name: Ringkasan temuan
+        run: npm audit --omit=dev || true
+
+      - name: Gagalkan build kalau ada severity HIGH atau CRITICAL
+        run: npm audit --omit=dev --audit-level=high
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-report
+          path: backend/npm-audit.json
+          retention-days: 30
+
+  # ------------------------------------------------------------------
+  # Tahap 1c. SAST dengan Semgrep (T-06). Tanpa akun, tanpa server.
+  # ------------------------------------------------------------------
+  sast-semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan kode backend dan frontend
+        run: |
+          semgrep scan \
+            --config p/javascript --config p/nodejs --config p/owasp-top-ten \
+            --metrics=off \
+            --json-output=semgrep.json \
+            backend/src frontend/public/js
+
+      # Temuan severity ERROR menggagalkan build; WARNING hanya dilaporkan.
+      - name: Gate severity ERROR
+        run: |
+          python3 - <<'EOF'
+          import json, sys
+          r = json.load(open('semgrep.json'))['results']
+          err = [x for x in r if x['extra']['severity'] == 'ERROR']
+          print(f"Total temuan: {len(r)} | ERROR: {len(err)}")
+          for x in err:
+              print(f"  {x['path']}:{x['start']['line']}  {x['check_id']}")
+          sys.exit(1 if err else 0)
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.json
+          retention-days: 30
+
+  # ------------------------------------------------------------------
+  # Tahap 1d. SonarQube / SonarCloud (opsional)
+  # Runner GitHub tidak bisa menjangkau SonarQube di Proxmox, jadi job ini
+  # hanya aktif kalau SONAR_TOKEN dan SONAR_HOST_URL diisi (mis. SonarCloud:
+  # https://sonarcloud.io). Tanpa itu, job dilewati dan tidak membuat build merah.
+  # ------------------------------------------------------------------
+  sast-sonar:
+    name: SAST (SonarQube, opsional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - name: Cek konfigurasi
+        id: cfg
+        run: |
+          if [ -n "$SONAR_TOKEN" ] && [ -n "$SONAR_HOST_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SonarQube dilewati: SONAR_TOKEN / SONAR_HOST_URL belum diisi"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: SonarSource/sonarqube-scan-action@v5.0.0
+        if: steps.cfg.outputs.enabled == 'true'
+
+      - uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
+        if: steps.cfg.outputs.enabled == 'true'
+        timeout-minutes: 5
+
+  # ------------------------------------------------------------------
+  # Tahap 2. Build image + scan image (T-12, T-14)
+  # ------------------------------------------------------------------
+  build-scan:
+    name: Build + Trivy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: |
+          docker build -t habitriver-backend:ci  ./backend
+          docker build -t habitriver-frontend:ci ./frontend
+
+      - name: Pastikan container tidak berjalan sebagai root (T-14)
+        run: |
+          for img in habitriver-backend:ci habitriver-frontend:ci; do
+            uid="$(docker run --rm --entrypoint id "$img" -u)"
+            echo "$img berjalan sebagai uid=$uid"
+            if [ "$uid" = "0" ]; then
+              echo "::error::$img berjalan sebagai root"; exit 1
+            fi
+          done
+
+      - name: Trivy scan image backend
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: habitriver-backend:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Trivy scan image frontend
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: habitriver-frontend:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Dockerfile dan docker-compose.yml: hanya dilaporkan (tidak menggagalkan build)
+      - name: Trivy scan konfigurasi (Dockerfile, compose)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+  # ------------------------------------------------------------------
+  # Tahap 3. Jalankan stack di runner, uji keamanan, lalu OWASP ZAP (DAST)
+  # Mencakup T-01, T-02, T-04, T-05, T-06, T-07, T-11
+  # ------------------------------------------------------------------
+  dast:
+    name: DAST (smoke test + OWASP ZAP)
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, sca, sast-semgrep, build-scan]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # .env asli ada di .gitignore, jadi di CI dibuat baru dengan nilai acak sekali pakai.
+      - name: Buat .env sementara untuk CI
+        run: |
+          MONGO_PASSWORD="$(openssl rand -hex 16)"
+          JWT_SECRET="$(openssl rand -hex 32)"
+          ADMIN_PASSWORD="$(openssl rand -hex 12)"
+          echo "::add-mask::$MONGO_PASSWORD"
+          echo "::add-mask::$JWT_SECRET"
+          echo "::add-mask::$ADMIN_PASSWORD"
+          {
+            echo "MONGO_USER=habitadmin"
+            echo "MONGO_PASSWORD=$MONGO_PASSWORD"
+            echo "JWT_SECRET=$JWT_SECRET"
+            echo "ADMIN_USERNAME=admin"
+            echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
+          } > .env
+          # dipakai skrip smoke test; tersimpan di env job, bukan di log
+          echo "CI_ADMIN_PASSWORD=$ADMIN_PASSWORD" >> "$GITHUB_ENV"
+
+      # Hanya tiga service ini; cloudflared (kalau ada di compose) tidak ikut jalan.
+      - name: Jalankan stack
+        run: docker compose up -d --build --wait mongo backend frontend
+
+      - name: Tunggu aplikasi siap
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
+              echo "Aplikasi siap setelah ${i} percobaan"; exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::Aplikasi tidak merespons di http://127.0.0.1:8080/api/health"
+          docker compose ps
+          docker compose logs --tail=80
+          exit 1
+
+      - name: Smoke test keamanan
+        env:
+          BASE_URL: http://127.0.0.1:8080
+          ADMIN_USERNAME: admin
+          ADMIN_PASSWORD: ${{ env.CI_ADMIN_PASSWORD }}
+        run: bash scripts/security-smoke.sh
+
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://127.0.0.1:8080
+          artifact_name: zap-baseline-report
+          allow_issue_writing: false
+          # Mulai dari mode laporan saja. Ubah ke true kalau temuan awal
+          # (mis. CSP belum ada) sudah dibereskan dan ingin dijadikan gerbang.
+          fail_action: false
+
+      - name: Log container saat gagal
+        if: failure()
+        run: docker compose logs --tail=150
+
+      - name: Matikan stack
+        if: always()
+        run: docker compose down -v
+
+  # ------------------------------------------------------------------
+  # Tahap 4. Deploy ke VM lewat Tailscale (OPSIONAL, nonaktif secara bawaan)
+  # Aktifkan dengan membuat repository variable DEPLOY_ENABLED = true
+  # dan mengisi secret yang tercantum di PIPELINE.md.
+  # ------------------------------------------------------------------
+  deploy:
+    name: Deploy ke VM (Tailscale + SSH)
+    runs-on: ubuntu-latest
+    needs: dast
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    environment: staging
+    timeout-minutes: 15
+    steps:
+      - name: Sambungkan runner ke Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Siapkan SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY"    > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # git pull --ff-only: berhenti kalau ada perubahan lokal di VM, bukan menimpanya.
+      - name: Deploy
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes "$VM_USER@$VM_HOST" '
+            set -e
+            cd ~/habitriver
+            git pull --ff-only origin main
+            docker compose up -d --build
+            sleep 5
+            curl -fsS http://127.0.0.1:8080/api/health
+          '
