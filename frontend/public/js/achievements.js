@@ -21,7 +21,7 @@ function checkAchievements() {
         }
     });
     if (newUnlocks.length) {
-        localStorage.setItem(`achievements_${currentUser}`, JSON.stringify(unlockedAchievements));
+        saveUserData(currentUser);
         newUnlocks.forEach(a => showToast(`Achievement unlocked — ${a.name}`, 'achievement', 4000));
         playSound('achievement');
         renderAchievements();
