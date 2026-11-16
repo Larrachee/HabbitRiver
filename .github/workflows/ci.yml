@@ -148,7 +148,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: SonarSource/sonarqube-scan-action@v5.0.0
+      - uses: SonarSource/sonarqube-scan-action@v8.5.0
         if: steps.cfg.outputs.enabled == 'true'
 
       - uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
