@@ -181,7 +181,7 @@ jobs:
           done
 
       - name: Trivy scan image backend
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: habitriver-backend:ci
           format: table
@@ -190,7 +190,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy scan image frontend
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: habitriver-frontend:ci
           format: table
@@ -200,7 +200,7 @@ jobs:
 
       # Dockerfile dan docker-compose.yml: hanya dilaporkan (tidak menggagalkan build)
       - name: Trivy scan konfigurasi (Dockerfile, compose)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
