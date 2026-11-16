@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # gitleaks memeriksa seluruh riwayat commit
 
@@ -51,7 +51,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -89,7 +89,7 @@ jobs:
     container:
       image: semgrep/semgrep:latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Scan kode backend dan frontend
         run: |
@@ -143,7 +143,7 @@ jobs:
             echo "::notice::SonarQube dilewati: SONAR_TOKEN / SONAR_HOST_URL belum diisi"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.cfg.outputs.enabled == 'true'
         with:
           fetch-depth: 0
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build image
         run: |
@@ -218,7 +218,7 @@ jobs:
     needs: [secrets-scan, sca, sast-semgrep, build-scan]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # .env asli ada di .gitignore, jadi di CI dibuat baru dengan nilai acak sekali pakai.
       - name: Buat .env sementara untuk CI
